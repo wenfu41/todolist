@@ -9,8 +9,10 @@ class TaskRepository(private val taskDao: TaskDao) {
     fun getAllTasks(): LiveData<List<Task>> = taskDao.getAllTasks()
     fun getActiveTasks(): LiveData<List<Task>> = taskDao.getActiveTasks()
     fun getCompletedTasks(): LiveData<List<Task>> = taskDao.getCompletedTasks()
+    fun getTasksWithAlarm(): LiveData<List<Task>> = taskDao.getTasksWithAlarm()
     fun getActiveTaskCount(): LiveData<Int> = taskDao.getActiveTaskCount()
     fun getCompletedTaskCount(): LiveData<Int> = taskDao.getCompletedTaskCount()
+    fun getAlarmTaskCount(): LiveData<Int> = taskDao.getAlarmTaskCount()
 
     suspend fun insertTask(task: Task): Long {
         return taskDao.insertTask(task)
@@ -31,6 +33,10 @@ class TaskRepository(private val taskDao: TaskDao) {
     suspend fun updateTaskCompletion(id: Long, completed: Boolean) {
         val completedAt = if (completed) System.currentTimeMillis() else null
         taskDao.updateTaskCompletion(id, completed, completedAt)
+    }
+
+    suspend fun updateTaskAlarm(id: Long, alarmTime: Long?, hasAlarm: Boolean) {
+        taskDao.updateTaskAlarm(id, alarmTime, hasAlarm)
     }
 
     suspend fun getTaskById(id: Long): Task? {

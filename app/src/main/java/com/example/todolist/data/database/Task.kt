@@ -11,5 +11,7 @@ data class Task(
     val description: String,
     val isCompleted: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),
-    val completedAt: Long? = null
+    val completedAt: Long? = null,
+    val alarmTime: Long? = null, // 闹钟时间戳
+    val hasAlarm: Boolean = false // 是否设置了闹钟
 )

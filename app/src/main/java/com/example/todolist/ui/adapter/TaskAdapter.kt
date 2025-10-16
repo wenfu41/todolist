@@ -5,12 +5,15 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.CheckBox
 import android.widget.ImageButton
+import android.widget.ImageView
 import android.widget.TextView
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.example.todolist.R
 import com.example.todolist.data.database.Task
+import java.text.SimpleDateFormat
+import java.util.*
 
 class TaskAdapter : ListAdapter<Task, TaskAdapter.TaskViewHolder>(TaskDiffCallback()) {
 
@@ -28,12 +31,29 @@ class TaskAdapter : ListAdapter<Task, TaskAdapter.TaskViewHolder>(TaskDiffCallba
         private val checkBox: CheckBox = itemView.findViewById(R.id.cbTaskComplete)
         private val titleTextView: TextView = itemView.findViewById(R.id.tvTaskTitle)
         private val descriptionTextView: TextView = itemView.findViewById(R.id.tvTaskDescription)
+        private val editButton: ImageButton = itemView.findViewById(R.id.btnEditTask)
         private val deleteButton: ImageButton = itemView.findViewById(R.id.btnDeleteTask)
+        private val alarmIcon: ImageView = itemView.findViewById(R.id.ivAlarmIcon)
+        private val alarmTimeText: TextView = itemView.findViewById(R.id.tvAlarmTime)
+
+        private val timeFormat = SimpleDateFormat("MM月dd日 HH:mm", Locale.getDefault())
 
         fun bind(task: Task) {
             checkBox.isChecked = task.isCompleted
             titleTextView.text = task.title
             descriptionTextView.text = task.description
+
+            // 显示闹钟信息
+            if (task.hasAlarm && task.alarmTime != null && !task.isCompleted) {
+                alarmIcon.visibility = View.VISIBLE
+                alarmTimeText.visibility = View.VISIBLE
+                val alarmDate = Date(task.alarmTime)
+                val formattedTime = timeFormat.format(alarmDate)
+                alarmTimeText.text = formattedTime
+            } else {
+                alarmIcon.visibility = View.GONE
+                alarmTimeText.visibility = View.GONE
+            }
 
             // 设置删除线效果
             if (task.isCompleted) {
@@ -41,11 +61,15 @@ class TaskAdapter : ListAdapter<Task, TaskAdapter.TaskViewHolder>(TaskDiffCallba
                 descriptionTextView.paintFlags = descriptionTextView.paintFlags or android.graphics.Paint.STRIKE_THRU_TEXT_FLAG
                 titleTextView.alpha = 0.6f
                 descriptionTextView.alpha = 0.6f
+                alarmIcon.alpha = 0.6f
+                alarmTimeText.alpha = 0.6f
             } else {
                 titleTextView.paintFlags = titleTextView.paintFlags and android.graphics.Paint.STRIKE_THRU_TEXT_FLAG.inv()
                 descriptionTextView.paintFlags = descriptionTextView.paintFlags and android.graphics.Paint.STRIKE_THRU_TEXT_FLAG.inv()
                 titleTextView.alpha = 1.0f
                 descriptionTextView.alpha = 1.0f
+                alarmIcon.alpha = 1.0f
+                alarmTimeText.alpha = 1.0f
             }
 
             checkBox.setOnCheckedChangeListener { _, isChecked ->
@@ -54,6 +78,10 @@ class TaskAdapter : ListAdapter<Task, TaskAdapter.TaskViewHolder>(TaskDiffCallba
                     onTaskCheckedChangeListener?.onTaskChanged(task, isChecked)
                     checkBox.tag = null
                 }
+            }
+
+            editButton.setOnClickListener {
+                onTaskEditListener?.onTaskEdit(task)
             }
 
             deleteButton.setOnClickListener {
@@ -70,8 +98,13 @@ class TaskAdapter : ListAdapter<Task, TaskAdapter.TaskViewHolder>(TaskDiffCallba
         fun onTaskDelete(task: Task)
     }
 
+    interface OnTaskEditListener {
+        fun onTaskEdit(task: Task)
+    }
+
     private var onTaskCheckedChangeListener: OnTaskCheckedChangeListener? = null
     private var onTaskDeleteListener: OnTaskDeleteListener? = null
+    private var onTaskEditListener: OnTaskEditListener? = null
 
     fun setOnTaskCheckedChangeListener(listener: OnTaskCheckedChangeListener) {
         this.onTaskCheckedChangeListener = listener
@@ -79,6 +112,10 @@ class TaskAdapter : ListAdapter<Task, TaskAdapter.TaskViewHolder>(TaskDiffCallba
 
     fun setOnTaskDeleteListener(listener: OnTaskDeleteListener) {
         this.onTaskDeleteListener = listener
+    }
+
+    fun setOnTaskEditListener(listener: OnTaskEditListener) {
+        this.onTaskEditListener = listener
     }
 
     class TaskDiffCallback : DiffUtil.ItemCallback<Task>() {
