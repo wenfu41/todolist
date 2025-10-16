@@ -13,6 +13,9 @@ class AlarmSnoozeReceiver : BroadcastReceiver() {
         val taskTitle = intent.getStringExtra("task_title") ?: "任务提醒"
         val taskDescription = intent.getStringExtra("task_description") ?: ""
 
+        // 停止当前的闹钟服务
+        stopAlarmService(context)
+
         // 取消当前通知
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.cancel(taskId.toInt())
@@ -55,5 +58,10 @@ class AlarmSnoozeReceiver : BroadcastReceiver() {
         } catch (e: SecurityException) {
             e.printStackTrace()
         }
+    }
+
+    private fun stopAlarmService(context: Context) {
+        val serviceIntent = Intent(context, AlarmService::class.java)
+        context.stopService(serviceIntent)
     }
 }

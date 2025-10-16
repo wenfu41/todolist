@@ -105,35 +105,57 @@ addOnScrollListener(object : RecyclerView.OnScrollListener() {
 
 **关键点**：只在 `SCROLL_STATE_IDLE` 状态（滚动完全停止）时才处理数值更新。
 
-### 🎨 视觉反馈机制
-
-#### 选中状态高亮
+#### 3. 初始化顺序控制
 
 ```kotlin
-// NumberPickerAdapter 中的选中状态处理
-fun bind(number: Int, isSelected: Boolean, onItemSelected: (Int) -> Unit, onSelectedChange: (Int) -> Unit) {
+fun setDateTime(timeInMillis: Long) {
+    isInitializing = true  // 防止初始化时触发监听器
+    try {
+        // 设置时间值
+        currentYear = calendar.get(Calendar.YEAR)
+        currentMonth = calendar.get(Calendar.MONTH) + 1
+        // ... 设置其他值
+
+        // 先滚动到目标位置
+        monthPicker.scrollToPosition(currentMonth - 1)
+
+        post {
+            // 后设置选中状态和监听器
+            monthAdapter.setSelectedPosition(currentMonth - 1)
+        }
+    } finally {
+        // 延迟重置标志
+        postDelayed({ isInitializing = false }, 500)
+    }
+}
+```
+
+**关键机制**：`isInitializing` 标志防止初始化过程中意外触发数值变化。
+
+#### 4. 选中状态高亮显示
+
+```kotlin
+// Adapter 中的绑定逻辑
+fun bind(number: Int, isSelected: Boolean, onItemSelected: (Int) -> Unit) {
     if (isSelected) {
-        // 选中项：白色文字、36sp大小、完全透明、粗体、紫色背景
-        numberText.setTextColor(itemView.context.getColor(R.color.white))
+        // 选中项样式：白色文字、36sp、粗体、紫色背景
+        numberText.setTextColor(Color.WHITE)
         numberText.textSize = 36f
-        numberText.alpha = 1.0f
-        numberText.setTypeface(null, android.graphics.Typeface.BOLD)
-        itemView.setBackgroundColor(itemView.context.getColor(R.color.purple_primary))
+        numberText.setTypeface(null, Typeface.BOLD)
+        itemView.setBackgroundColor(Color.parseColor("#6200EE"))
     } else {
-        // 非选中项：次要色文字、32sp大小、60%透明、普通字体、透明背景
-        numberText.setTextColor(itemView.context.getColor(R.color.text_secondary))
+        // 非选中项样式：灰色文字、32sp、普通字体、透明背景
+        numberText.setTextColor(Color.parseColor("#757575"))
         numberText.textSize = 32f
-        numberText.alpha = 0.6f
-        numberText.setTypeface(null, android.graphics.Typeface.NORMAL)
+        numberText.setTypeface(null, Typeface.NORMAL)
         itemView.setBackgroundColor(Color.TRANSPARENT)
     }
 }
 ```
 
-#### 居中对齐机制
+#### 5. 居中对齐布局
 
 ```xml
-<!-- RecyclerView 布局配置 -->
 <androidx.recyclerview.widget.RecyclerView
     android:layout_width="56dp"
     android:layout_height="56dp"
@@ -142,44 +164,63 @@ fun bind(number: Int, isSelected: Boolean, onItemSelected: (Int) -> Unit, onSele
     android:paddingBottom="24dp" />
 ```
 
-**作用**：
+**设计原理**：
 - `clipToPadding="false"`：允许内容在 padding 区域显示
-- `paddingTop/Bottom="24dp"`：为上下方留出空间，实现居中效果
+- 上下各 24dp padding：为选中项提供居中空间
+
+### 🎨 视觉反馈机制
+
+#### 选中项高亮效果
+- **背景颜色**：紫色 (`#6200EE`)
+- **文字颜色**：白色 (`#FFFFFF`)
+- **字体大小**：36sp（比非选中项大 4sp）
+- **字体样式**：粗体
+
+#### 非选中项样式
+- **背景颜色**：透明
+- **文字颜色**：灰色 (`#757575`)
+- **字体大小**：32sp
+- **字体样式**：普通
+
+#### 滑动动画
+- **吸附动画**：使用 `smoothScrollToPosition()` 实现平滑过渡
+- **状态切换**：选中项变化时立即更新视觉状态
+- **居中效果**：确保选中项始终在视图中心
 
 ### 💡 设计优势
 
 #### 1. 操作容错性
-- **防止误操作**：轻微滑动不会改变数值，避免意外修改
-- **明确意图**：只有明确的滑动操作才会改变数值
+- **防止误操作**：轻微滑动不会改变数值
+- **明确意图**：只有充分的滑动操作才会改变数值
+- **橡皮筋效果**：小幅度滑动自动回弹
 
 #### 2. 视觉连贯性
 - **平滑动画**：所有滚动都有平滑的过渡效果
 - **即时反馈**：选中状态立即更新，用户清楚知道当前选择
+- **视觉层次**：选中项突出显示，非选中项相对淡化
 
 #### 3. 操作效率
 - **快速切换**：熟练用户可以快速滑动到目标数值
 - **精确定位**：自动吸附确保数值准确，无需手动微调
+- **批量操作**：支持连续滑动操作
 
 ### 🎯 实际应用场景
 
-#### 场景1：设置闹钟时间
-**用户目标**：设置明天早上 7:30 的闹钟
-
+#### 场景1：设置明天早上7:30的闹钟
 **操作步骤**：
 1. 打开添加任务界面，开启闹钟开关
 2. 月份选择器：当前"10月"，无需修改
 3. 日期选择器：从"16日"滑动到"17日"（充分滑动）
-4. 小时选择器：从"15时"滑动到"7时"（大幅滑动，经过多次数值）
-5. 分钟选择器：从"30分"轻微滑动后回弹，确认"30分"合适
+4. 小时选择器：从"15时"滑动到"7时"（大幅滑动）
+5. 分钟选择器：轻微滑动后回弹，确认"30分"合适
 
 **交互体验**：
 - 每次滑动都有明确的视觉反馈
 - 误操作（轻微滑动）不会影响设置
 - 大幅滑动可以快速到达目标数值
 
-#### 场景2：快速浏览可选时间
+#### 场景2：快速浏览时间选项
 **用户目标**：查看可用的分钟选项
-
 **操作步骤**：
 1. 在分钟选择器上连续轻滑
 2. 观察"00分"、"05分"、"10分"等选项
@@ -192,19 +233,21 @@ fun bind(number: Int, isSelected: Boolean, onItemSelected: (Int) -> Unit, onSele
 
 ---
 
-## 应用特性
+## 📱 应用特性
 
 ### 核心功能
 - ✅ **任务管理**：创建、编辑、删除待办任务
 - ✅ **任务状态**：标记任务为已完成或进行中
-- ✅ **任务筛选**：查看全部任务、进行中任务、已完成任务
+- ✅ **任务筛选**：查看全部任务、进行中、已完成任务
 - ✅ **任务详情**：包含标题和描述信息
 
 ### 闹钟功能
 - ⏰ **可选闹钟**：为每个任务设置闹钟提醒
 - 🕐 **自定义时间**：年月日小时分钟精确设置
 - 🔔 **智能提醒**：时间到达时发送通知
-- 📱 **权限管理**：自动处理Android 12+精确闹钟权限
+- 🎵 **内置音频**：使用10秒音频文件确保可靠响铃
+- 📳 **振动提醒**：振动1秒，停止0.3秒，循环模式
+- 🎛️ **自动停止**：10秒后自动停止，避免过度干扰
 
 ### 用户界面
 - 🎨 **Material Design**：现代化Material Design界面
@@ -212,7 +255,7 @@ fun bind(number: Int, isSelected: Boolean, onItemSelected: (Int) -> Unit, onSele
 - 🌙 **卡片式设计**：清晰的任务展示
 - 🎯 **智能滑动交互**：自动吸附式时间选择器
 
-## 技术架构
+## 🛠️ 技术架构
 
 ### 开发环境
 - **语言**：Kotlin
@@ -234,45 +277,77 @@ fun bind(number: Int, isSelected: Boolean, onItemSelected: (Int) -> Unit, onSele
 - `TaskDao`：数据库访问对象
 - `TaskAdapter`：RecyclerView适配器
 - `DateTimePicker`：自定义时间选择器
-- `AlarmManager`：闹钟管理系统
+- `AlarmSoundManager`：闹钟音频管理
+- `AlarmReceiver`：闹钟广播接收器
 
-## 应用界面
+## 🔧 构建和运行
 
-### 主要功能区域
-1. **顶部筛选标签**：全部任务、进行中、已完成
-2. **任务列表区域**：卡片式任务展示
-3. **浮动添加按钮**：创建新任务
-4. **空状态提示**：友好的空列表提示
+### 环境要求
+- Android Studio Arctic Fox 或更高版本
+- JDK 17
+- Android SDK API 34
 
-### 任务项功能
-- ✅ **复选框**：标记任务完成状态
-- ✏️ **编辑按钮**：修改任务内容和闹钟
-- 🗑️ **删除按钮**：删除不需要的任务
-- ⏰ **闹钟图标**：显示闹钟提醒时间
+### 构建步骤
+1. 克隆项目到本地
+2. 设置全局JDK环境变量：
+   ```bash
+   export JAVA_HOME=/usr/lib/jvm/java-17-openjdk
+   ```
+3. 在项目根目录执行：
+   ```bash
+   ./gradlew assembleDebug
+   ```
+4. 安装到设备或模拟器：
+   ```bash
+   ./gradlew installDebug
+   ```
 
-### 对话框界面
-- **添加/编辑任务**：输入标题和描述
-- **闹钟设置**：可选的闹钟功能开关
-- **时间选择器**：自定义滑动选择年月日时分
+## 📁 项目结构
 
-## 权限说明
+```
+app/
+├── src/main/
+│   ├── java/com/example/todolist/
+│   │   ├── data/
+│   │   │   ├── database/          # 数据库相关
+│   │   │   │   ├── AppDatabase.kt
+│   │   │   │   ├── TaskDao.kt
+│   │   │   │   └── Converters.kt
+│   │   │   └── repository/        # 数据仓库
+│   │   │       └── TaskRepository.kt
+│   │   ├── ui/
+│   │   │   ├── adapter/          # RecyclerView适配器
+│   │   │   │   └── TaskAdapter.kt
+│   │   │   └── widget/           # 自定义控件
+│   │   │       ├── DateTimePicker.kt
+│   │   │       └── adapter/
+│   │   │           └── NumberPickerAdapter.kt
+│   │   ├── alarm/                # 闹钟功能
+│   │   │   ├── AlarmReceiver.kt
+│   │   │   ├── AlarmSoundManager.kt
+│   │   │   ├── AlarmDismissReceiver.kt
+│   │   │   └── AlarmSnoozeReceiver.kt
+│   │   └── MainActivity.kt       # 主活动
+│   ├── res/
+│   │   ├── layout/               # 布局文件
+│   │   │   ├── activity_main.xml
+│   │   │   ├── item_task.xml
+│   │   │   └── dialog_add_task.xml
+│   │   ├── values/               # 字符串和颜色
+│   │   │   ├── colors.xml
+│   │   │   ├── strings.xml
+│   │   │   └── themes.xml
+│   │   ├── drawable/             # 图标资源
+│   │   └── raw/                  # 原始资源
+│   │       └── alarm_sound.wav   # 闹钟音频文件
+│   └── AndroidManifest.xml       # 应用清单
+├── build.gradle                  # 应用构建配置
+└── README.md                     # 项目说明
+```
 
-应用需要以下权限：
+## 📊 数据库设计
 
-### Android 13+ (API 33+)
-- `POST_NOTIFICATIONS`：发送通知权限
-
-### Android 12+ (API 31+)
-- `SCHEDULE_EXACT_ALARM`：精确闹钟权限
-
-### 权限处理
-- 应用启动时自动请求必要权限
-- 权限被拒绝时提供友好提示
-- 不获取ROOT权限，确保应用安全
-
-## 数据存储
-
-### 数据库结构
+### 任务表结构
 ```kotlin
 @Entity(tableName = "tasks")
 data class Task(
@@ -288,90 +363,130 @@ data class Task(
 )
 ```
 
-### 数据操作
-- 插入新任务
-- 更新任务信息
-- 删除任务
-- 查询任务（全部/进行中/已完成/有闹钟）
+## 🔐 权限说明
 
-## 闹钟系统
+应用需要以下权限：
 
-### 闹钟类型
-- **精确闹钟**：Android 12+使用setExactAndAllowWhileIdle
-- **系统闹钟**：Android 6.0-11使用setExactAndAllowWhileIdle
-- **兼容闹钟**：Android 6.0以下使用setExact
+### Android 13+ (API 33+)
+- `POST_NOTIFICATIONS`：发送通知权限
 
-### 闹钟管理
-- **设置闹钟**：任务创建或编辑时设置
-- **取消闹钟**：任务删除或完成时取消
-- **更新闹钟**：任务编辑时重新设置
-- **重启恢复**：设备重启后自动恢复闹钟
+### Android 12+ (API 31+)
+- `SCHEDULE_EXACT_ALARM`：精确闹钟权限
 
-## 编译和运行
+### 其他权限
+- `VIBRATE`：振动权限
+- `WAKE_LOCK`：防止设备休眠
+- `RECEIVE_BOOT_COMPLETED`：开机自启动
 
-### 环境要求
-- Android Studio Arctic Fox 或更高版本
-- JDK 17
-- Android SDK API 34
+**注意**：应用已优化权限请求，只在需要时才请求权限，避免干扰用户体验。
 
-### 编译步骤
-1. 克隆项目到本地
-2. 设置全局JDK环境变量：
-   ```bash
-   export JAVA_HOME=/usr/lib/jvm/java-17-openjdk
-   ```
-3. 在项目根目录执行：
-   ```bash
-   ./gradlew assembleDebug
-   ```
-4. 安装到设备或模拟器：
-   ```bash
-   ./gradlew installDebug
-   ```
+## 🎵 闹钟音频
 
-## 项目结构
+### 音频文件信息
+- **文件名**：alarm_sound.wav
+- **时长**：10秒
+- **文件大小**：1.7MB
+- **格式**：WAV (PCM 16-bit, 44.1kHz, 立体声)
 
-```
-app/
-├── src/main/
-│   ├── java/com/example/todolist/
-│   │   ├── data/
-│   │   │   ├── database/          # 数据库相关
-│   │   │   └── repository/        # 数据仓库
-│   │   ├── ui/
-│   │   │   ├── adapter/          # RecyclerView适配器
-│   │   │   ├── viewmodel/        # ViewModel
-│   │   │   └── widget/           # 自定义控件
-│   │   ├── alarm/                # 闹钟功能
-│   │   └── MainActivity.kt       # 主活动
-│   ├── res/
-│   │   ├── layout/               # 布局文件
-│   │   ├── drawable/             # 图标资源
-│   │   ├── values/               # 字符串和颜色
-│   │   └── mipmap/               # 应用图标
-│   └── AndroidManifest.xml       # 应用清单
-├── build.gradle                  # 应用构建配置
-└── README.md                     # 项目说明
-```
+### 音频特性
+- **循环播放**：音频结束后自动重新开始
+- **自动停止**：10秒后通过定时器自动停止
+- **振动同步**：音频播放时同步振动提醒
+- **兼容性好**：使用标准WAV格式，支持所有Android设备
 
-## 版本信息
+## 🎯 用户操作指南
 
-- **版本号**：1.0
-- **版本代码**：1
-- **最后更新**：2025年10月
+### 添加任务
+1. 点击右下角的浮动按钮
+2. 输入任务标题（必填）
+3. 输入任务描述（可选）
+4. 如需闹钟提醒，开启"设置闹钟提醒"开关
+5. 在时间选择器中滑动选择闹钟时间
+6. 点击"保存"按钮
 
-## 开发者说明
+### 时间选择器操作
+- **轻微滑动**：滑动距离小于半个数字高度时会自动回弹
+- **充分滑动**：滑动距离超过半个数字高度时会切换到相邻数字
+- **快速滑动**：可以快速滑动到目标数值
+- **精确选择**：松手后自动吸附到最近的数字
 
-本应用遵循以下开发原则：
-- 不涉及手机ROOT权限
-- 使用官方推荐的架构模式
-- 注重用户体验和界面美观
-- 保证数据安全和隐私保护
+### 管理任务
+- **标记完成**：点击任务左侧的复选框
+- **编辑任务**：点击任务卡片的编辑按钮
+- **删除任务**：点击任务卡片的删除按钮
+- **查看详情**：点击任务卡片查看完整信息
 
-## GitHub推送
+### 闹钟操作
+- **关闭闹钟**：点击通知中的"关闭"按钮
+- **稍后提醒**：点击通知中的"稍后提醒"按钮（5分钟后再次提醒）
 
-项目已准备就绪，可以直接推送到GitHub仓库。
+## 🐛 常见问题
 
-## 许可证
+### Q: 为什么时间选择器会自动回弹？
+A: 这是设计的防误操作机制。当滑动距离小于阈值时，系统认为这是误操作，会自动回弹到原位置。
 
-本项目仅用于学习和演示目的。
+### Q: 如何精确选择时间？
+A: 进行充分滑动，确保滑动距离超过半个数字的高度，这样就会切换到下一个数字。
+
+### Q: 闹钟为什么不响？
+A: 请检查以下设置：
+1. 确保闹钟开关已开启
+2. 检查设备音量是否开启
+3. 确认应用有通知权限
+4. 检查设备是否处于静音模式
+
+### Q: 可以自定义闹钟铃声吗？
+A: 目前使用内置的10秒音频文件，如需自定义，请替换 `res/raw/alarm_sound.wav` 文件。
+
+## 📈 性能优化
+
+### 文件大小优化
+- **音频文件**：从50MB优化到1.7MB（减少96.6%）
+- **APK体积**：通过资源优化和代码混淆减小APK大小
+- **内存使用**：及时释放音频和振动资源，避免内存泄漏
+
+### 代码优化
+- **架构简化**：移除复杂的前台服务，直接在广播接收器中处理
+- **权限优化**：按需请求权限，减少用户干扰
+- **布局优化**：使用ViewBinding替代findViewById，提高性能
+
+## 🔄 版本历史
+
+### v1.0 (当前版本)
+- ✅ 完整的任务管理功能
+- ✅ 创新的自动吸附式时间选择器
+- ✅ 可靠的闹钟提醒系统
+- ✅ 优化的音频文件大小
+- ✅ 简化的权限管理
+- ✅ Material Design界面
+
+## 🤝 贡献指南
+
+欢迎提交Issue和Pull Request来改进这个项目。
+
+### 开发规范
+- 遵循Kotlin编码规范
+- 使用Material Design设计规范
+- 添加适当的注释和文档
+- 确保向后兼容性
+
+## 📄 许可证
+
+本项目采用 MIT 许可证。详见 LICENSE 文件。
+
+## 👨‍💻 开发者
+
+本项目由 Claude Code Assistant 开发维护。
+
+---
+
+## 🌟 特色功能总结
+
+1. **智能时间选择器**：创新的自动吸附机制，提供流畅的用户体验
+2. **可靠闹钟系统**：使用内置音频文件，确保闹钟正常工作
+3. **精确时间控制**：10秒自动停止，既有效提醒又不过度干扰
+4. **权限优化**：按需请求，减少用户干扰
+5. **性能优化**：文件大小优化，代码结构简洁
+6. **用户友好**：直观的界面设计，详细的操作反馈
+
+**这是一个功能完整、设计精美的待办事项应用，特别适合需要时间管理和任务提醒的用户使用。**

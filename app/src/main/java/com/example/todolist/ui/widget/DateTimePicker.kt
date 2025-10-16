@@ -38,6 +38,9 @@ class DateTimePicker @JvmOverloads constructor(
 
     var onDateTimeChangedListener: ((year: Int, month: Int, day: Int, hour: Int, minute: Int) -> Unit)? = null
 
+    // 添加标志防止初始化时触发监听器
+    private var isInitializing = false
+
     init {
         LayoutInflater.from(context).inflate(R.layout.widget_date_time_picker, this, true)
 
@@ -195,26 +198,36 @@ class DateTimePicker @JvmOverloads constructor(
     }
 
     private fun setCurrentDateTime() {
-        // 滚动到当前时间
-        monthPicker.scrollToPosition(currentMonth - 1)
-        hourPicker.scrollToPosition(currentHour)
-        minutePicker.scrollToPosition(currentMinute)
+        isInitializing = true
+        try {
+            // 滚动到当前时间
+            monthPicker.scrollToPosition(currentMonth - 1)
+            hourPicker.scrollToPosition(currentHour)
+            minutePicker.scrollToPosition(currentMinute)
 
-        // 设置选中状态
-        post {
-            monthAdapter.setSelectedPosition(currentMonth - 1)
-            hourAdapter.setSelectedPosition(currentHour)
-            minuteAdapter.setSelectedPosition(currentMinute)
+            // 设置选中状态
+            post {
+                monthAdapter.setSelectedPosition(currentMonth - 1)
+                hourAdapter.setSelectedPosition(currentHour)
+                minuteAdapter.setSelectedPosition(currentMinute)
 
-            // 再次滚动确保完全居中
-            monthPicker.smoothScrollToPosition(currentMonth - 1)
-            hourPicker.smoothScrollToPosition(currentHour)
-            minutePicker.smoothScrollToPosition(currentMinute)
+                // 再次滚动确保完全居中
+                monthPicker.smoothScrollToPosition(currentMonth - 1)
+                hourPicker.smoothScrollToPosition(currentHour)
+                minutePicker.smoothScrollToPosition(currentMinute)
+            }
+        } finally {
+            // 延迟重置标志，确保所有设置完成
+            postDelayed({
+                isInitializing = false
+            }, 500)
         }
     }
 
     private fun notifyDateTimeChanged() {
-        onDateTimeChangedListener?.invoke(currentYear, currentMonth, currentDay, currentHour, currentMinute)
+        if (!isInitializing) {
+            onDateTimeChangedListener?.invoke(currentYear, currentMonth, currentDay, currentHour, currentMinute)
+        }
     }
 
     fun getSelectedDateTime(): Long {
@@ -225,33 +238,41 @@ class DateTimePicker @JvmOverloads constructor(
     }
 
     fun setDateTime(timeInMillis: Long) {
-        val calendar = Calendar.getInstance()
-        calendar.timeInMillis = timeInMillis
+        isInitializing = true
+        try {
+            val calendar = Calendar.getInstance()
+            calendar.timeInMillis = timeInMillis
 
-        currentYear = calendar.get(Calendar.YEAR)
-        currentMonth = calendar.get(Calendar.MONTH) + 1
-        currentDay = calendar.get(Calendar.DAY_OF_MONTH)
-        currentHour = calendar.get(Calendar.HOUR_OF_DAY)
-        currentMinute = calendar.get(Calendar.MINUTE)
+            currentYear = calendar.get(Calendar.YEAR)
+            currentMonth = calendar.get(Calendar.MONTH) + 1
+            currentDay = calendar.get(Calendar.DAY_OF_MONTH)
+            currentHour = calendar.get(Calendar.HOUR_OF_DAY)
+            currentMinute = calendar.get(Calendar.MINUTE)
 
-        // 先滚动到目标位置
-        monthPicker.scrollToPosition(currentMonth - 1)
-        hourPicker.scrollToPosition(currentHour)
-        minutePicker.scrollToPosition(currentMinute)
+            // 先滚动到目标位置
+            monthPicker.scrollToPosition(currentMonth - 1)
+            hourPicker.scrollToPosition(currentHour)
+            minutePicker.scrollToPosition(currentMinute)
 
-        // 设置选中状态并确保完全居中
-        post {
-            monthAdapter.setSelectedPosition(currentMonth - 1)
-            hourAdapter.setSelectedPosition(currentHour)
-            minuteAdapter.setSelectedPosition(currentMinute)
+            // 设置选中状态并确保完全居中
+            post {
+                monthAdapter.setSelectedPosition(currentMonth - 1)
+                hourAdapter.setSelectedPosition(currentHour)
+                minuteAdapter.setSelectedPosition(currentMinute)
 
-            // 再次滚动确保完全居中
-            monthPicker.smoothScrollToPosition(currentMonth - 1)
-            hourPicker.smoothScrollToPosition(currentHour)
-            minutePicker.smoothScrollToPosition(currentMinute)
+                // 再次滚动确保完全居中
+                monthPicker.smoothScrollToPosition(currentMonth - 1)
+                hourPicker.smoothScrollToPosition(currentHour)
+                minutePicker.smoothScrollToPosition(currentMinute)
+            }
+
+            updateDayPicker()
+        } finally {
+            // 延迟重置标志，确保所有设置完成
+            postDelayed({
+                isInitializing = false
+            }, 500)
         }
-
-        updateDayPicker()
     }
 
     fun getFormattedDateTime(): String {

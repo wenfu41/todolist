@@ -23,43 +23,33 @@ class AlarmReceiver : BroadcastReceiver() {
 
         Log.d("AlarmReceiver", "任务ID: $taskId, 标题: $taskTitle, 描述: $taskDescription")
 
-        showNotification(context, taskId, taskTitle, taskDescription)
+        // 直接播放声音和振动，不使用服务
+        val soundManager = AlarmSoundManager(context)
+        soundManager.startAlarmSound()
+        soundManager.startVibration()
+
+        // 显示简单通知
+        showSimpleNotification(context, taskId, taskTitle, taskDescription, soundManager)
+
+        Log.d("AlarmReceiver", "闹钟提醒已启动")
     }
 
-    private fun showNotification(context: Context, taskId: Long, title: String, description: String) {
-        Log.d("AlarmReceiver", "显示通知开始")
+    private fun showSimpleNotification(context: Context, taskId: Long, title: String, description: String, soundManager: AlarmSoundManager) {
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-        // 创建通知渠道（Android 8.0+）
+        // 创建通知渠道
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
-                "task_reminder",
+                "simple_task_reminder",
                 "任务提醒",
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
-                this.description = "任务闹钟提醒"
-                enableVibration(true)
+                setDescription("简单任务闹钟提醒")
+                enableVibration(false) // 由我们自己的振动管理
                 enableLights(true)
             }
             notificationManager.createNotificationChannel(channel)
-            Log.d("AlarmReceiver", "通知渠道创建完成")
         }
-
-        // 创建点击通知后的Intent
-        val mainIntent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-        }
-
-        val pendingIntent = PendingIntent.getActivity(
-            context,
-            taskId.toInt(),
-            mainIntent,
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            } else {
-                PendingIntent.FLAG_UPDATE_CURRENT
-            }
-        )
 
         // 创建关闭闹钟的Intent
         val dismissIntent = Intent(context, AlarmDismissReceiver::class.java).apply {
@@ -68,7 +58,7 @@ class AlarmReceiver : BroadcastReceiver() {
 
         val dismissPendingIntent = PendingIntent.getBroadcast(
             context,
-            taskId.toInt() + 1000, // 避免与主通知冲突
+            taskId.toInt() + 1000,
             dismissIntent,
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
@@ -77,44 +67,18 @@ class AlarmReceiver : BroadcastReceiver() {
             }
         )
 
-        // 创建稍后提醒的Intent
-        val snoozeIntent = Intent(context, AlarmSnoozeReceiver::class.java).apply {
-            putExtra("task_id", taskId)
-            putExtra("task_title", title)
-            putExtra("task_description", description)
-        }
-
-        val snoozePendingIntent = PendingIntent.getBroadcast(
-            context,
-            taskId.toInt() + 2000,
-            snoozeIntent,
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            } else {
-                PendingIntent.FLAG_UPDATE_CURRENT
-            }
-        )
-
-        // 构建通知
-        val notification = NotificationCompat.Builder(context, "task_reminder")
+        // 构建简单通知
+        val notification = NotificationCompat.Builder(context, "simple_task_reminder")
             .setSmallIcon(R.drawable.ic_alarm)
             .setContentTitle(title)
             .setContentText(if (description.isNotEmpty()) description else "任务时间到了！")
-            .setStyle(NotificationCompat.BigTextStyle().bigText(
-                if (description.isNotEmpty()) description else "任务时间到了！\n点击查看任务详情。"
-            ))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setAutoCancel(true)
-            .setDefaults(NotificationCompat.DEFAULT_ALL)
-            .setContentIntent(pendingIntent)
+            .setAutoCancel(false)
+            .setDefaults(NotificationCompat.DEFAULT_LIGHTS) // 只使用灯光，不使用默认声音和振动
             .addAction(R.drawable.ic_delete, "关闭", dismissPendingIntent)
-            .addAction(R.drawable.ic_add, "稍后提醒", snoozePendingIntent)
             .build()
 
-        Log.d("AlarmReceiver", "通知构建完成，准备显示")
-
-        // 显示通知
         notificationManager.notify(taskId.toInt(), notification)
-        Log.d("AlarmReceiver", "通知已显示，ID: ${taskId.toInt()}")
+        Log.d("AlarmReceiver", "简单通知已显示")
     }
 }

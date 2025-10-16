@@ -26,4 +26,7 @@
     <!-- Gradient Colors -->
     <color name="gradient_start">#8B7CF6</color>
     <color name="gradient_end">#6D5CE8</color>
+
+    <!-- Delete/Action Colors -->
+    <color name="delete_red">#FF5252</color>
 </resources>

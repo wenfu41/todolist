@@ -1,9 +1,6 @@
 package com.example.todolist
 
-import android.Manifest
 import android.app.AlertDialog
-import android.content.pm.PackageManager
-import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.view.LayoutInflater
@@ -11,10 +8,7 @@ import android.view.View
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.ViewModelProvider
@@ -33,16 +27,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var taskViewModel: TaskViewModel
     private lateinit var taskAdapter: TaskAdapter
 
-    // 权限请求启动器
-    private val permissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions ->
-        val allGranted = permissions.values.all { it }
-        if (!allGranted) {
-            Toast.makeText(this, "请授予闹钟权限以正常使用提醒功能", Toast.LENGTH_LONG).show()
-        }
-    }
-
+  
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -55,8 +40,8 @@ class MainActivity : AppCompatActivity() {
             insets
         }
 
-        // 请求权限
-        requestAlarmPermissions()
+        // 不在启动时请求权限，只在用户需要闹钟功能时才请求
+        // requestAlarmPermissions()
 
         initViewModel()
         initRecyclerView()
@@ -65,30 +50,7 @@ class MainActivity : AppCompatActivity() {
         observeViewModel()
     }
 
-    private fun requestAlarmPermissions() {
-        val permissions = mutableListOf<String>()
-
-        // 通知权限（Android 13+）
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            permissions.add(Manifest.permission.POST_NOTIFICATIONS)
-        }
-
-        // 精确闹钟权限（Android 12+）
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            permissions.add(Manifest.permission.SCHEDULE_EXACT_ALARM)
-        }
-
-        if (permissions.isNotEmpty()) {
-            val missingPermissions = permissions.filter { permission ->
-                ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED
-            }
-
-            if (missingPermissions.isNotEmpty()) {
-                permissionLauncher.launch(missingPermissions.toTypedArray())
-            }
-        }
-    }
-
+    
     private fun initViewModel() {
         taskViewModel = ViewModelProvider(this)[TaskViewModel::class.java]
     }
@@ -243,39 +205,17 @@ class MainActivity : AppCompatActivity() {
 
         // 闹钟开关点击事件
         dialogBinding.switchAlarm.setOnCheckedChangeListener { _, isChecked ->
-            hasAlarm = isChecked
             if (isChecked) {
-                // 显示时间选择器
-                dialogBinding.alarmTimeContainer.visibility = View.VISIBLE
-
-                // 设置默认时间为当前时间+1小时
-                val calendar = Calendar.getInstance()
-                calendar.add(Calendar.HOUR_OF_DAY, 1)
-                dialogBinding.dateTimePicker.setDateTime(calendar.timeInMillis)
-
-                // 设置时间变化监听
-                dialogBinding.dateTimePicker.onDateTimeChangedListener = { year, month, day, hour, minute ->
-                    val timeCalendar = Calendar.getInstance()
-                    timeCalendar.set(year, month - 1, day, hour, minute, 0)
-                    selectedAlarmTime = timeCalendar.timeInMillis
-
-                    // 直接更新标题
-                    val format = SimpleDateFormat("MM月dd日 HH:mm", Locale.getDefault())
-                    titleText.text = "添加新任务 - $format"
-
-                    Log.d("MainActivity", "时间选择器更新: $format")
+                // 直接开启闹钟功能，不检查权限
+                hasAlarm = true
+                showAlarmTimePicker(dialogBinding, titleText) { time ->
+                    selectedAlarmTime = time
                 }
-
-                // 初始化时间并更新标题
-                selectedAlarmTime = calendar.timeInMillis
-                val format = SimpleDateFormat("MM月dd日 HH:mm", Locale.getDefault())
-                titleText.text = "添加新任务 - $format"
-
             } else {
+                hasAlarm = false
                 // 隐藏时间选择器
                 dialogBinding.alarmTimeContainer.visibility = View.GONE
                 selectedAlarmTime = null
-
                 // 恢复原始标题
                 titleText.text = "添加新任务"
             }
@@ -292,10 +232,9 @@ class MainActivity : AppCompatActivity() {
             val description = dialogBinding.etTaskDescription.text?.toString()?.trim() ?: ""
 
             if (title.isNotEmpty()) {
-                // 如果设置了闹钟但还没选择时间，使用当前时间+1小时
+                // 如果设置了闹钟但还没选择时间，使用当前时间
                 if (hasAlarm && selectedAlarmTime == null) {
                     val calendar = Calendar.getInstance()
-                    calendar.add(Calendar.HOUR_OF_DAY, 1)
                     selectedAlarmTime = calendar.timeInMillis
                 }
 
@@ -355,17 +294,7 @@ class MainActivity : AppCompatActivity() {
         // 设置闹钟开关状态
         dialogBinding.switchAlarm.isChecked = hasAlarm
 
-        // 如果原有闹钟，显示时间选择器并更新标题
-        if (hasAlarm && task.alarmTime != null) {
-            dialogBinding.alarmTimeContainer.visibility = View.VISIBLE
-            dialogBinding.dateTimePicker.setDateTime(task.alarmTime)
-
-            // 更新标题显示原有时间
-            val format = SimpleDateFormat("MM月dd日 HH:mm", Locale.getDefault())
-            titleText.text = "编辑任务 - $format"
-        }
-
-        // 设置时间变化监听（在开关变化之前设置）
+        // 设置时间变化监听（先设置，避免后续设置时间时触发）
         dialogBinding.dateTimePicker.onDateTimeChangedListener = { year, month, day, hour, minute ->
             val timeCalendar = Calendar.getInstance()
             timeCalendar.set(year, month - 1, day, hour, minute, 0)
@@ -378,6 +307,16 @@ class MainActivity : AppCompatActivity() {
             Log.d("MainActivity", "编辑时间选择器更新: $format")
         }
 
+        // 如果原有闹钟，显示时间选择器并更新标题
+        if (hasAlarm && task.alarmTime != null) {
+            dialogBinding.alarmTimeContainer.visibility = View.VISIBLE
+            dialogBinding.dateTimePicker.setDateTime(task.alarmTime)
+
+            // 更新标题显示原有时间
+            val format = SimpleDateFormat("MM月dd日 HH:mm", Locale.getDefault())
+            titleText.text = "编辑任务 - $format"
+        }
+
         // 闹钟开关点击事件
         dialogBinding.switchAlarm.setOnCheckedChangeListener { _, isChecked ->
             hasAlarm = isChecked
@@ -385,11 +324,10 @@ class MainActivity : AppCompatActivity() {
                 // 显示时间选择器
                 dialogBinding.alarmTimeContainer.visibility = View.VISIBLE
 
-                // 如果没有原有的闹钟时间，设置为当前时间+1小时
+                // 如果没有原有的闹钟时间，设置为当前时间
                 val currentTime = selectedAlarmTime
                 if (currentTime == null) {
                     val calendar = Calendar.getInstance()
-                    calendar.add(Calendar.HOUR_OF_DAY, 1)
                     selectedAlarmTime = calendar.timeInMillis
                     dialogBinding.dateTimePicker.setDateTime(calendar.timeInMillis)
 
@@ -429,10 +367,9 @@ class MainActivity : AppCompatActivity() {
             val description = dialogBinding.etTaskDescription.text?.toString()?.trim() ?: ""
 
             if (title.isNotEmpty()) {
-                // 如果设置了闹钟但还没选择时间，使用当前时间+1小时
+                // 如果设置了闹钟但还没选择时间，使用当前时间
                 if (hasAlarm && selectedAlarmTime == null) {
                     val calendar = Calendar.getInstance()
-                    calendar.add(Calendar.HOUR_OF_DAY, 1)
                     selectedAlarmTime = calendar.timeInMillis
                 }
 
@@ -470,13 +407,48 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showDeleteConfirmationDialog(task: com.example.todolist.data.database.Task) {
-        AlertDialog.Builder(this)
+        val dialog = AlertDialog.Builder(this)
             .setTitle("删除任务")
             .setMessage("确定要删除任务「${task.title}」吗？\n${task.description}")
             .setPositiveButton("删除") { _, _ ->
                 taskViewModel.deleteTask(task)
             }
             .setNegativeButton("取消", null)
-            .show()
+            .create()
+
+        dialog.show()
+
+        // 将删除按钮设置为红色
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(getColor(R.color.delete_red))
+    }
+
+    private fun showAlarmTimePicker(dialogBinding: DialogAddTaskBinding, titleText: TextView, onTimeSelected: (Long) -> Unit) {
+        // 显示时间选择器
+        dialogBinding.alarmTimeContainer.visibility = View.VISIBLE
+
+        // 设置默认时间为当前时间
+        val calendar = Calendar.getInstance()
+
+        // 设置时间选择器的时间（先设置时间，避免监听器被触发）
+        dialogBinding.dateTimePicker.setDateTime(calendar.timeInMillis)
+
+        // 初始化并更新标题
+        onTimeSelected(calendar.timeInMillis)
+        val format = SimpleDateFormat("MM月dd日 HH:mm", Locale.getDefault())
+        titleText.text = "添加新任务 - $format"
+
+        // 设置时间变化监听（在时间设置之后）
+        dialogBinding.dateTimePicker.onDateTimeChangedListener = { year, month, day, hour, minute ->
+            val timeCalendar = Calendar.getInstance()
+            timeCalendar.set(year, month - 1, day, hour, minute, 0)
+            val selectedTime = timeCalendar.timeInMillis
+            onTimeSelected(selectedTime)
+
+            // 直接更新标题
+            val format = SimpleDateFormat("MM月dd日 HH:mm", Locale.getDefault())
+            titleText.text = "添加新任务 - $format"
+
+            Log.d("MainActivity", "时间选择器更新: $format")
+        }
     }
 }
